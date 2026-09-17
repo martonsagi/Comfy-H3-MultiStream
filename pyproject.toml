@@ -1,0 +1,37 @@
+# SPDX-FileCopyrightText: 2026 Márton Sági
+# SPDX-License-Identifier: GPL-3.0-only
+
+[project]
+name = "comfyui-h3-multistream"
+description = "Multi-GPU acceleration and caching for MiniMax H3 video generation in ComfyUI: Ulysses sequence and head parallelism across 1-8 GPUs, sparse attention inside the split, a pipelined exchange, and text-encoder/VAE caches."
+version = "1.0.0"
+license = { file = "LICENSE" }
+readme = "README.md"
+# 3.12 and 3.13 are the versions this is tested on. Nothing in the sources needs 3.11+ syntax,
+# so older interpreters may well work -- but they have not been run, so they are not claimed.
+requires-python = ">=3.12"
+# Nothing beyond what ComfyUI already installs: torch, comfy*, server, aiohttp, tqdm, psutil.
+dependencies = []
+keywords = ["comfyui", "minimax-h3", "multi-gpu", "video", "sequence-parallelism", "sparse-attention"]
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: GPU :: NVIDIA CUDA",
+]
+
+[[project.authors]]
+name = "Márton Sági"
+
+[project.urls]
+Repository = "https://github.com/martonsagi/Comfy-H3-MultiStream"
+
+[tool.comfy]
+# https://registry.comfy.org/publishers/msagi
+PublisherId = "msagi"
+DisplayName = "ComfyUI-H3-MultiStream"
+Icon = ""
+# Native MiniMax H3, the Model Sparse Attention node, comfy-kitchen 0.2.33 and comfy-aimdo 0.5.3 all first
+# shipped together in 0.35.0.
+requires-comfyui = ">=0.35.0"

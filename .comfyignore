@@ -1,0 +1,4 @@
+# Kept on GitHub, left out of the registry package that ComfyUI-Manager installs.
+docs/demo/*.mp4
+tests/
+.github/

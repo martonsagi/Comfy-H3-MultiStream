@@ -1,0 +1,12 @@
+MiniMax H3 is licensed under the MiniMax H3 Community License Agreement, Copyright © 2026 MiniMax. All Rights Reserved.
+
+This project (ComfyUI-H3-MultiStream) does not include or distribute MiniMax H3 model weights, documentation or other
+MiniMax H3 materials. It is software that works with MiniMax H3 when the user provides the model. Obtaining and using
+MiniMax H3 is subject to the MiniMax H3 Community License Agreement, including its territorial restrictions.
+
+The performance and parity results in this repository's documentation (README.md and docs/) were produced under an
+authorization from MiniMax granted to Dynasist Solutions Kft. That authorization covers its holder only. It does not extend to users of this project,
+who must obtain and use MiniMax H3 in accordance with the MiniMax H3 Community License Agreement or their own
+authorization from MiniMax.
+
+ComfyUI-H3-MultiStream is licensed under the GNU General Public License v3.0 (GPL-3.0-only); see LICENSE.
