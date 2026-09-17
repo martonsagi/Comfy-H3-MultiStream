@@ -1,11 +1,8 @@
 name: Publish to Comfy registry
 on:
+  release:
+    types: [published]
   workflow_dispatch:
-  push:
-    branches:
-      - master
-    paths:
-      - "pyproject.toml"
 
 permissions:
   issues: write
@@ -18,6 +15,16 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v7
+      - name: Check the release tag matches the pyproject version
+        if: ${{ github.event_name == 'release' }}
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          if [ "${TAG#v}" != "$version" ]; then
+            echo "::error::Release tag $TAG does not match pyproject.toml version $version"
+            exit 1
+          fi
       - name: Publish Custom Node
         uses: Comfy-Org/publish-node-action@main
         with:
