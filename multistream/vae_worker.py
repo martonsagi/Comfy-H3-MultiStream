@@ -32,10 +32,13 @@ ap.add_argument("--address", required=True)
 ap.add_argument("--parent-pid", type=int, required=True)
 ap.add_argument("--comfy-root", required=True)
 ap.add_argument("--gpu", default="?")
-cli = ap.parse_args()
-sys.argv = sys.argv[:1]  # keep ComfyUI's argument parser on defaults
+cli, comfy_args = ap.parse_known_args()
+sys.argv = sys.argv[:1] + comfy_args
 sys.path.insert(0, cli.comfy_root)
 os.chdir(cli.comfy_root)
+
+import comfy.options
+comfy.options.enable_args_parsing()
 
 logging.basicConfig(level=logging.INFO, stream=sys.stderr,
                     format=f"%(asctime)s [H3 MultiStream] [VAE worker gpu{cli.gpu} pid{os.getpid()}] %(levelname)s %(message)s")

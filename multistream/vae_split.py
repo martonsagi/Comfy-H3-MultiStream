@@ -31,6 +31,7 @@ from multiprocessing.connection import Listener
 
 import torch
 
+from comfy.cli_args import args
 import comfy.model_management as mm
 
 from . import gpus as ms_gpus
@@ -40,7 +41,7 @@ from .log import log, vram
 _CFG_ATTR = "_h3ms_vae_split_cfg"
 _ORIG_ATTR = "_h3ms_orig_decode_temporal"
 _WRAP_ATTR = "_h3ms_wrap_decode_temporal"
-_COMFY_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+_COMFY_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(mm.__file__)))
 _WORKER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vae_worker.py")
 START_TIMEOUT = float(os.environ.get("H3MS_VAE_WORKER_START_TIMEOUT", "300"))
 TRANSPORT = os.environ.get("H3MS_VAE_TRANSPORT", "auto").strip().lower()   # auto | shm | bytes
@@ -144,9 +145,13 @@ class _Worker:
         env["H3MS_AUTHKEY"] = authkey.hex()
         env["PYTHONPATH"] = _COMFY_ROOT + os.pathsep + env.get("PYTHONPATH", "")
         log_file = open(self.log_path, "w")
+        attention_flags = ["--" + name.replace("_", "-") for name in (
+            "use_split_cross_attention", "use_quad_cross_attention", "use_pytorch_cross_attention",
+            "use_sage_attention", "use_flash_attention", "use_ck_attention",
+            "force_upcast_attention", "dont_upcast_attention", "disable_xformers") if getattr(args, name)]
         t0 = time.perf_counter()
         log.info("[VAE split] starting worker process for %s (log %s)", self.name, self.log_path)
-        self.proc = subprocess.Popen([sys.executable, _WORKER_SCRIPT, "--address", address,
+        self.proc = subprocess.Popen([sys.executable, _WORKER_SCRIPT, *attention_flags, "--address", address,
                                       "--parent-pid", str(os.getpid()), "--comfy-root", _COMFY_ROOT,
                                       "--gpu", self._suffix[3:]],
                                      env=env, cwd=_COMFY_ROOT, stdout=log_file, stderr=log_file)
