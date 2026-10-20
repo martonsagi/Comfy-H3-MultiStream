@@ -6,7 +6,7 @@ Started by multistream/vae_split.py as a plain subprocess (not multiprocessing s
 main.py) with CUDA_VISIBLE_DEVICES set to its GPU, so its cuda:0 is that GPU. No comfy-aimdo here: ComfyUI's
 legacy loading, the VAE fully loaded onto the GPU for a job and unloaded afterwards so it holds no VRAM between scenes.
 
-Protocol over an authenticated AF_UNIX multiprocessing.connection:
+Protocol over an authenticated multiprocessing.connection (AF_UNIX on Linux, AF_PIPE on Windows):
   ("load", vae_path)                    -> ("ready", info) | ("load_error", traceback)
   ("job", job_id, [(i, shape, dtype, raw_bytes), ...], transport)
       transport "shm" (default when omitted): ("chunk", job_id, i, shm_name, shape, dtype, seconds) per chunk; the
@@ -27,6 +27,8 @@ import threading
 import time
 import traceback
 
+import psutil
+
 ap = argparse.ArgumentParser()
 ap.add_argument("--address", required=True)
 ap.add_argument("--parent-pid", type=int, required=True)
@@ -43,9 +45,13 @@ wlog = logging.getLogger("h3ms_vae_worker")
 
 
 def _watch_parent():
+    try:
+        parent = psutil.Process(cli.parent_pid)
+    except psutil.NoSuchProcess:
+        os._exit(0)
     while True:
-        if os.getppid() != cli.parent_pid:
-            wlog.warning("parent %d is gone (ppid now %d): exiting", cli.parent_pid, os.getppid())
+        if not parent.is_running():
+            wlog.warning("parent %d is gone: exiting", cli.parent_pid)
             os._exit(0)
         time.sleep(2)
 
@@ -109,7 +115,8 @@ def _send_chunk(conn, job_id, i, host, dt, transport):
 
 
 def main():
-    conn = Client(cli.address, family="AF_UNIX", authkey=bytes.fromhex(os.environ["H3MS_AUTHKEY"]))
+    conn = Client(cli.address, family="AF_PIPE" if os.name == "nt" else "AF_UNIX",
+                  authkey=bytes.fromhex(os.environ["H3MS_AUTHKEY"]))
     wlog.info("connected to parent %d", cli.parent_pid)
     vae = None
     loaded_path = None

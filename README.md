@@ -47,7 +47,7 @@ The transformer split, the VAE split and the caches do not change the computatio
 
 | Component | Requirement |
 |---|---|
-| Operating system | Linux. The VAE split decode worker uses AF_UNIX sockets and POSIX shared memory |
+| Operating system | Linux or Windows. VAE workers use AF_UNIX sockets and POSIX shared memory on Linux, authenticated named pipes and byte transfer on Windows |
 | GPUs | NVIDIA CUDA GPUs: two or more for the splits (the transformer split uses up to 8, the VAE split up to 8, 4 by default); one GPU runs unsplit with the caches. Peer-to-peer support is not required |
 | ComfyUI | 0.35.0 or newer (native MiniMax H3 and the Model Sparse Attention node). Tested on 0.35.0 with comfy-aimdo 0.5.3 (DynamicVRAM) |
 | PyTorch | Tested on 2.13.0+cu130 |
@@ -128,7 +128,7 @@ Both caches hook the encoder model shared by all CLIP clones, so they keep worki
 | `gpus` (optional) | H3MS_GPUS | | GPU selection from **H3 MS GPU Set** |
 | `max_gpus` (optional) | INT | `4` | At most this many GPUs decode, counting ComfyUI's own. The gain flattens after 3 to 4 GPUs: a 192-frame clip has 11 chunks, and the ordered blend runs on one GPU |
 
-The worker processes start in the background when the node executes, in parallel. They exit together with ComfyUI. Decoded chunks return through POSIX shared memory; when `/dev/shm` is too small for them, as in containers that mount only 64 MB, they return over each worker's socket instead, and a warning is logged.
+The worker processes start in the background when the node executes, in parallel. They exit together with ComfyUI. On Linux, decoded chunks return through POSIX shared memory; when `/dev/shm` is too small for them, as in containers that mount only 64 MB, they return over each worker's socket instead, and a warning is logged. Windows always uses byte transfer over authenticated named pipes, including when `H3MS_VAE_TRANSPORT=shm` is set.
 
 ### H3 MS VAE Cache
 
@@ -390,7 +390,7 @@ Safety rules:
 ## Security
 
 - **HTTP endpoints.** The `/h3multistream/*` endpoints have no authentication of their own, like the rest of ComfyUI's API. Anyone who can reach the ComfyUI port can read the status and release workers or caches. ComfyUI rejects cross-site browser requests, but not direct requests from other machines. Keep ComfyUI on `127.0.0.1` or a trusted network, and do not expose a `--listen` instance to the internet without an authenticating reverse proxy.
-- **Worker processes.** Each VAE worker connects over an AF_UNIX socket in a private per-process directory (mode 0700) and authenticates with a random key generated for each start. Decoded frames return through POSIX shared memory segments (mode 0600) that are removed after reading, or over that authenticated socket when `/dev/shm` is too small.
+- **Worker processes.** Each VAE worker authenticates with a random key generated for each start. On Linux it connects over an AF_UNIX socket in a private per-process directory (mode 0700); decoded frames return through POSIX shared memory segments (mode 0600) that are removed after reading, or over that authenticated socket when `/dev/shm` is too small. Windows uses a named pipe for both commands and decoded frames.
 - **No network access.** The node pack makes no network requests and downloads nothing. Model files are read through ComfyUI's own loaders.
 
 ## Logging
@@ -509,7 +509,7 @@ The weight caches fill on first use, and the VAE worker process starts when the 
 - **Model:** MiniMax H3 only. The transformer split relies on the H3 block structure and batch size 1.
 - **GPUs:** the transformer split uses up to 8 GPUs and needs at least one attention head per GPU (H3 has 56). The VAE split decode uses up to `max_gpus` (default 4) of the selected GPUs. One GPU runs unsplit.
 - **Loaders:** the caches need a loader that records a single-file reload factory. The core `UNETLoader`, `CLIPLoader` and `VAELoader` do.
-- **Platform:** the VAE split decode requires Linux.
+- **Platform:** Windows VAE workers use byte transfer; POSIX shared memory is Linux-only.
 - **ComfyUI internals:** the VAE split decode mirrors the chunk planning and blending of ComfyUI's H3 video VAE, and MultiStream mirrors ComfyUI's weight-cast semantics. After a ComfyUI update, re-run the parity tests before relying on bit-identical output.
 - **Bundled library internals:** the pack uses private helpers from comfy-kitchen and comfy-aimdo (see [Dependencies and code provenance](#dependencies-and-code-provenance)). A ComfyUI update that bumps those packages can break it or, for the int8 kernel, fall back to a slower path.
 - **CFG:** H3 runs at CFG 1, so ComfyUI's core MultiGPU CFG Split offers no benefit. MultiStream parallelizes a single model pass instead.

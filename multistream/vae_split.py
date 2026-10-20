@@ -15,7 +15,7 @@ on the VAE's device, ranks 1..N-1 are the workers. Each worker gets its chunks a
 decodes its own chunks and replays upstream's blend + write loop in chunk order, taking each worker chunk as it arrives.
 
 Decoded chunks come back through POSIX shared memory, or as raw bytes over the worker's socket when /dev/shm is too small
-for them (containers often mount only 64 MB) or H3MS_VAE_TRANSPORT=bytes.
+for them (containers often mount only 64 MB) or H3MS_VAE_TRANSPORT=bytes. Windows uses authenticated named pipes and bytes.
 """
 import inspect
 import itertools
@@ -138,7 +138,9 @@ class _Worker:
                         self.proc.returncode, _log_tail(self.log_path))
         authkey = os.urandom(16)
         address = os.path.join(_run_dir(), f"vae-{self._suffix}-{time.time_ns()}.sock")
-        listener = Listener(address, family="AF_UNIX", authkey=authkey)
+        if os.name == "nt":
+            address = rf"\\.\pipe\h3ms-vae-{os.getpid()}-{self._suffix}-{time.time_ns()}"
+        listener = Listener(address, family="AF_PIPE" if os.name == "nt" else "AF_UNIX", authkey=authkey)
         env = os.environ.copy()
         env["CUDA_VISIBLE_DEVICES"] = str(self.gpu_index)
         env["H3MS_AUTHKEY"] = authkey.hex()
@@ -149,7 +151,8 @@ class _Worker:
         self.proc = subprocess.Popen([sys.executable, _WORKER_SCRIPT, "--address", address,
                                       "--parent-pid", str(os.getpid()), "--comfy-root", _COMFY_ROOT,
                                       "--gpu", self._suffix[3:]],
-                                     env=env, cwd=_COMFY_ROOT, stdout=log_file, stderr=log_file)
+                                     env=env, cwd=_COMFY_ROOT, stdout=log_file, stderr=log_file,
+                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
         log_file.close()
         accepted = {}
 
@@ -416,6 +419,8 @@ def install(vae, enabled=True, second_gpu_index=None, reserve_gib=None, gpu_set=
 def _choose_transport(m0, z, spans, n_remote):
     """'shm' when /dev/shm can hold every worker chunk at once (workers may run ahead of the ordered blend), else
     'bytes' over the socket. H3MS_VAE_TRANSPORT=shm|bytes forces a mode."""
+    if os.name == "nt":
+        return "bytes", "Windows named pipe"
     if TRANSPORT in ("shm", "bytes"):
         return TRANSPORT, f"H3MS_VAE_TRANSPORT={TRANSPORT}"
     s, e = spans[0]
@@ -500,7 +505,7 @@ def _split_decode_temporal(m0, workers, z, output_buffer):
                                       clip.reshape(-1).view(torch.uint8).numpy().tobytes()))
     n_remote = sum(len(r) for r in remote)
     transport, why = _choose_transport(m0, z, spans, n_remote)
-    if transport == "bytes":
+    if transport == "bytes" and os.name != "nt":
         log.warning("[VAE split] chunks return over the worker sockets instead of shared memory: %s", why)
     job_ids = [next(w.jobs) for w in workers]
     log.info("[VAE split] decode jobs %s: latent %s (%d frames out), %d chunks over %d GPU ranks: %d on %s, %s | "
